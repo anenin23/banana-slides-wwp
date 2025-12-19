@@ -6,22 +6,24 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: banana-slides-backend
-    # 权限设置：UID 100, GID 1026
-    user: "100:1026"
     ports:
-      # 宿主机端口改为 5007，容器内部默认监听 5000
+      # 将宿主机端口 5000 改为 5007
       - "5007:5000"
     environment:
+      # 方案 B：设置群晖用户权限环境变量
+      - PUID=1026
+      - PGID=100
       - PORT=5000
-      # 代理设置：指向你的 NAS 代理地址
+      # 代理设置：让后端能通过你的代理访问 AI 接口
       - HTTP_PROXY=http://192.168.50.245:7890
       - HTTPS_PROXY=http://192.168.50.245:7890
       - http_proxy=http://192.168.50.245:7890
       - https_proxy=http://192.168.50.245:7890
+      - NO_PROXY=localhost,127.0.0.1,banana-slides-network
     env_file:
       - .env
     volumes:
-      # 请确保这些文件夹在 /volume2/docker/banana-slides 下已手动创建
+      # 使用你提供的绝对路径
       - /volume2/docker/banana-slides/backend/instance:/app/backend/instance
       - /volume2/docker/banana-slides/uploads:/app/uploads
     restart: unless-stopped
@@ -40,12 +42,14 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         DOCKER_BUILDKIT: 1
-        # 核心：前端构建时必须知道后端的外网访问地址
+        # 极其重要：前端编译时必须指定浏览器访问后端的真实地址（NAS IP + 新端口）
         VITE_API_BASE_URL: http://192.168.50.245:5007
     container_name: banana-slides-frontend
-    user: "100:1026"
+    environment:
+      - PUID=1026
+      - PGID=100
     ports:
-      # 宿主机端口改为 3007
+      # 将宿主机端口 3000 改为 3007
       - "3007:80"
     depends_on:
       - backend
