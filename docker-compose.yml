@@ -7,21 +7,28 @@ services:
       dockerfile: backend/Dockerfile
     container_name: banana-slides-backend
     ports:
-      # 宿主机端口:容器内部端口（由 PORT 控制，默认 5000）
-      # 外部访问始终是 http://localhost:5000，内部监听端口可通过 PORT 调整
-      - "5000:${PORT:-5000}"
-    # 从 .env 文件自动加载所有环境变量
+      # 将宿主机端口 5000 改为 5007
+      - "5007:5000"
+    environment:
+      # 方案 B：设置群晖用户权限环境变量
+      - PUID=1026
+      - PGID=100
+      - PORT=5000
+      # 代理设置：让后端能通过你的代理访问 AI 接口
+      - HTTP_PROXY=http://192.168.50.245:7890
+      - HTTPS_PROXY=http://192.168.50.245:7890
+      - http_proxy=http://192.168.50.245:7890
+      - https_proxy=http://192.168.50.245:7890
+      - NO_PROXY=localhost,127.0.0.1,banana-slides-network
     env_file:
       - .env
     volumes:
-      # 持久化数据库
-      - ./backend/instance:/app/backend/instance
-      # 持久化上传的文件
-      - ./uploads:/app/uploads
+      # 使用你提供的绝对路径
+      - /volume2/docker/banana-slides/backend/instance:/app/backend/instance
+      - /volume2/docker/banana-slides/uploads:/app/uploads
     restart: unless-stopped
     healthcheck:
-      # 健康检查同样跟随 PORT（默认 5000）
-      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-5000}/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -33,13 +40,17 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      # Windows 兼容性：禁用符号链接跟随 + 前端构建参数
       args:
         DOCKER_BUILDKIT: 1
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        # 极其重要：前端编译时必须指定浏览器访问后端的真实地址（NAS IP + 新端口）
+        VITE_API_BASE_URL: http://192.168.50.245:5007
     container_name: banana-slides-frontend
+    environment:
+      - PUID=1026
+      - PGID=100
     ports:
-      - "3000:80"
+      # 将宿主机端口 3000 改为 3007
+      - "3007:80"
     depends_on:
       - backend
     restart: unless-stopped
@@ -49,8 +60,4 @@ services:
 networks:
   banana-slides-network:
     driver: bridge
-
-volumes:
-  backend-data:
-  uploads-data:
 
