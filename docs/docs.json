@@ -15,7 +15,7 @@
         "groups": [
           {
             "group": "Getting Started",
-            "pages": ["index", "quickstart", "configuration"]
+            "pages": ["index", "quickstart", "configuration", "server-mode"]
           },
           {
             "group": "Features",
@@ -39,7 +39,7 @@
         "groups": [
           {
             "group": "快速上手",
-            "pages": ["zh/index", "zh/quickstart", "zh/configuration"]
+            "pages": ["zh/index", "zh/quickstart", "zh/configuration", "zh/server-mode"]
           },
           {
             "group": "功能",

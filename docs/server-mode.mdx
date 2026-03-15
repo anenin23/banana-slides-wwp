@@ -1,0 +1,152 @@
+---
+title: "Server Mode"
+description: "Remote deployment, process spawning, and access control"
+---
+
+## Overview
+
+Banana Slides runs as a client-server application with a Flask backend and React frontend. This guide covers configuration options for remote deployment, worker process spawning, and access control.
+
+## Host & Port Configuration
+
+By default the backend binds to `0.0.0.0` (all interfaces), making it accessible remotely.
+
+```env
+BACKEND_PORT=5000
+FRONTEND_PORT=3000
+```
+
+When running from source without `BACKEND_PORT` set, the port is auto-computed from the project directory name so that multiple worktrees get unique ports.
+
+<Tip>
+  In Docker, the container always uses port 5000 internally. `BACKEND_PORT` controls the host-side mapping.
+</Tip>
+
+## Remote Access Control
+
+### Access Code
+
+Protect your instance with an access code. All `/api/` endpoints will require the code in the `X-Access-Code` header:
+
+```env
+ACCESS_CODE=your-secret-code
+```
+
+Leave empty to disable access code protection.
+
+### CORS Origins
+
+Control which origins can access the API:
+
+```env
+# Allow all origins
+CORS_ORIGINS=*
+
+# Restrict to specific origins (comma-separated)
+CORS_ORIGINS=https://example.com,https://app.example.com
+```
+
+## Worker Spawn Options
+
+Banana Slides uses a `ThreadPoolExecutor` to spawn background workers for concurrent AI generation tasks. Two worker pools handle different workloads:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_DESCRIPTION_WORKERS` | `5` | Maximum concurrent threads for generating page descriptions and outlines |
+| `MAX_IMAGE_WORKERS` | `8` | Maximum concurrent threads for image generation tasks |
+
+```env
+MAX_DESCRIPTION_WORKERS=5
+MAX_IMAGE_WORKERS=8
+```
+
+<Warning>
+  Setting worker counts too high may exceed your AI provider's rate limits or cause out-of-memory issues. Adjust based on your provider plan and server resources.
+</Warning>
+
+These values can also be changed at runtime through the web UI Settings page without restarting the server.
+
+## Subprocess Spawning
+
+The backend spawns external processes for specific tasks:
+
+### LibreOffice (PPTX to PDF)
+
+The PPT Renovation feature uses LibreOffice in headless mode to convert uploaded PPTX files to PDF:
+
+```bash
+libreoffice --headless --convert-to pdf <input.pptx>
+```
+
+- Timeout: 120 seconds per conversion
+- LibreOffice must be installed separately (not included by default)
+
+For Docker deployments:
+
+```bash
+docker exec -it banana-slides-backend bash -c \
+  "apt-get update && apt-get install -y libreoffice-impress && rm -rf /var/lib/apt/lists/*"
+```
+
+<Note>
+  We recommend converting PPTX to PDF locally before uploading, as server-side LibreOffice conversion may produce inaccurate results due to missing fonts.
+</Note>
+
+## Docker Deployment
+
+### Using Pre-built Images
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### Building from Source
+
+```bash
+docker compose up -d
+```
+
+### Container Configuration
+
+The `docker-compose.yml` spawns two services:
+
+| Service | Internal Port | Host Port Variable | Health Check |
+|---------|---------------|-------------------|--------------|
+| `backend` | 5000 | `BACKEND_PORT` | `GET /health` every 30s |
+| `frontend` | 80 | `FRONTEND_PORT` | — |
+
+### Health Monitoring
+
+The backend exposes a health check endpoint for remote monitoring:
+
+```bash
+curl http://your-server:5000/health
+# Response: {"status": "ok", "message": "Banana Slides API is running"}
+```
+
+Docker performs automatic health checks every 30 seconds with a 10-second timeout and 3 retries.
+
+## Environment & Timeouts
+
+Configure timeouts for AI provider connections when running remotely:
+
+```env
+# Gemini provider timeout (seconds)
+GENAI_TIMEOUT=300.0
+GENAI_MAX_RETRIES=2
+
+# OpenAI-compatible provider timeout (seconds)
+OPENAI_TIMEOUT=300.0
+OPENAI_MAX_RETRIES=2
+```
+
+## Production Checklist
+
+Before deploying remotely, ensure you have:
+
+- Set `FLASK_ENV=production` to disable debug mode and auto-reloader
+- Set a strong `SECRET_KEY` value
+- Configured `ACCESS_CODE` if the instance is publicly accessible
+- Restricted `CORS_ORIGINS` to your frontend domain
+- Adjusted `MAX_DESCRIPTION_WORKERS` and `MAX_IMAGE_WORKERS` for your server capacity
+- Set appropriate timeouts for your AI provider
